@@ -247,8 +247,9 @@ def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[1] if __doc__ else None)
   parser.add_argument(
     "--steps", type=float, nargs="*",
-    default=[0.0, 5.0, 10.0, 15.0, 25.0],
-    help="apply_angle sequence in degrees (default: 0, 5, 10, 15, 25 — ~7.5 s total)",
+    default=[0.0, 5.0, 10.0, 15.0, 25.0, 0.0, -25.0],
+    help="apply_angle sequence (default: 0, 5, 10, 15, 25, 0, -25 — ~10.5 s). "
+         "The pass through 0 before the negative avoids a sudden +25 to -25 reversal.",
   )
   args = parser.parse_args()
 
