@@ -46,7 +46,14 @@ class CarState(CarStateBase):
     ret.standstill = ret.vEgoRaw <= 0.1 # 0.1 m/s
 
     # gas
-    ret.gasPressed = cp_pt.vl["ECM_1"]["ACCELERATOR_PEDAL_POS"] > 20+1 # 20 baseline + 1 tolerance
+    # CMA ECM_1.ACCELERATOR_PEDAL_POS is raw 0-255 (DBC factor 1, idle ~20).
+    # SPA ECM_1.ACCELERATOR_PEDAL_POS is DBC-scaled to percent (factor 0.00390625, idle ~0).
+    # Thresholds must match volvo.h (see opendbc/safety/modes/volvo.h GAS_PRESSED_THRESHOLD_*)
+    # and opendbc/safety/tests/test_volvo.py::test_gas_threshold_self_consistent.
+    if self.is_spa:
+      ret.gasPressed = cp_pt.vl["ECM_1"]["ACCELERATOR_PEDAL_POS"] > 1.0  # percent
+    else:
+      ret.gasPressed = cp_pt.vl["ECM_1"]["ACCELERATOR_PEDAL_POS"] > 20+1  # raw counts, 20 baseline + 1 tolerance
 
     # brake
     #ret.brakePressed = bool(cp_main.vl["LCA_2"]["BRAKE_PEDAL_PRESSED_A"] or cp_main.vl["LCA_2"]["BRAKE_PEDAL_PRESSED_B"])
