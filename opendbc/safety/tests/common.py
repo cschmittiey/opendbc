@@ -898,6 +898,10 @@ class SafetyTest(SafetyTestBase):
               continue
             if attr.startswith('TestSubaruPreglobal') and current_test.startswith('TestSubaruPreglobal'):
               continue
+            # Volvo CMA and SPA share the same TX_MSGS list (static in volvo_init);
+            # safetyParam only switches RX checks and gas/speed scaling, not TX.
+            if attr.startswith('TestVolvo') and current_test.startswith('TestVolvo'):
+              continue
             if {attr, current_test}.issubset({'TestVolkswagenPqSafety', 'TestVolkswagenPqStockSafety', 'TestVolkswagenPqLongSafety'}):
               continue
             if {attr, current_test}.issubset({'TestGmCameraSafety', 'TestGmCameraLongitudinalSafety', 'TestGmAscmSafety',
