@@ -53,14 +53,11 @@ import cereal.messaging as messaging
 LIVE_TESTING_FILE = "/data/openpilot/live_testing.txt"
 LOG_FILE = "/data/openpilot/torque_vs_angle_calibration.csv"
 
-# Settling detection on driver torque
-SETTLE_WINDOW = 20             # samples in the rolling window (20 @ 20 Hz = 1 s)
-SETTLE_STD_THRESHOLD_NM = 0.8  # Nm; below this the torque is considered stable
-SETTLE_TIMEOUT_S = 10.0
-SAMPLE_INTERVAL_S = 0.05       # 20 Hz
-
-# After settling, average this many samples for the final reading
-FINAL_SAMPLE_COUNT = 40        # 2 s at 20 Hz
+# Per-step timing. Fixed rather than settle-detected to minimise driver fatigue.
+SAMPLE_INTERVAL_S = 0.05       # 20 Hz sampling
+SETTLE_WAIT_S = 0.8            # wait after commanding new angle, before sampling
+SAMPLE_WINDOW_S = 0.7          # averaging window for the step's mean torque
+# → ~1.5 s per step total
 
 # Safety
 MAX_DRIVER_TORQUE_NM = 25.0    # abort if driver torque magnitude exceeds this
@@ -107,60 +104,33 @@ class TorqueVsAngleCalibrator:
       return cs.steeringTorque, cs.steeringAngleDeg
     return None, None
 
-  def _wait_for_torque_settle(self) -> bool:
-    """Wait until rolling std of driver torque drops below SETTLE_STD_THRESHOLD_NM."""
-    torques: list[float] = []
+  def _sample_for(self, duration_s: float) -> tuple[list[float], list[float]]:
+    """Collect (torque, angle) samples for `duration_s` seconds; abort on overtorque."""
+    torques, angles = [], []
     start = time.time()
-    while self.running:
-      if time.time() - start > SETTLE_TIMEOUT_S:
-        print(f"  WARNING: torque did not settle in {SETTLE_TIMEOUT_S}s")
-        return False
-
-      tq, _ = self._read_state()
-      if tq is None:
+    while self.running and time.time() - start < duration_s:
+      tq, ang = self._read_state()
+      if tq is None or ang is None:
         continue
-
       if abs(tq) > MAX_DRIVER_TORQUE_NM:
         print(f"  SAFETY: driver torque {tq:+.1f} Nm exceeds limit. Aborting.")
         self.running = False
-        return False
-
-      torques.append(tq)
-      if len(torques) > SETTLE_WINDOW:
-        torques.pop(0)
-
-      if len(torques) >= SETTLE_WINDOW:
-        std = statistics.stdev(torques)
-        if std < SETTLE_STD_THRESHOLD_NM:
-          mean = statistics.mean(torques)
-          print(f"  settled in {time.time() - start:4.1f}s: "
-                f"mean_tq={mean:+.2f} Nm  std={std:.2f} Nm")
-          return True
-
-      time.sleep(SAMPLE_INTERVAL_S)
-    return False
-
-  def _collect_samples(self, n: int) -> tuple[list[float], list[float]]:
-    torques, angles = [], []
-    for _ in range(n):
-      if not self.running:
         break
-      tq, ang = self._read_state()
-      if tq is not None and ang is not None:
-        torques.append(tq)
-        angles.append(ang)
+      torques.append(tq)
+      angles.append(ang)
       time.sleep(SAMPLE_INTERVAL_S)
     return torques, angles
 
   def _test_step(self, target_angle: float, log_file) -> dict | None:
     print(f"\nCommanding apply_angle = {target_angle:+.1f}°")
     self._write_live_testing(target_angle)
-    print("  waiting for driver torque to settle...")
-    if not self._wait_for_torque_settle():
+
+    # Fixed wait for EPS to ramp and driver to stabilise grip.
+    _ = self._sample_for(SETTLE_WAIT_S)
+    if not self.running:
       return None
 
-    print(f"  averaging {FINAL_SAMPLE_COUNT} post-settle samples...")
-    tq_samples, ang_samples = self._collect_samples(FINAL_SAMPLE_COUNT)
+    tq_samples, ang_samples = self._sample_for(SAMPLE_WINDOW_S)
     if len(tq_samples) < 3:
       print(f"  WARNING: too few samples ({len(tq_samples)})")
       return None
@@ -277,9 +247,8 @@ def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[1] if __doc__ else None)
   parser.add_argument(
     "--steps", type=float, nargs="*",
-    default=[0.0, 5.0, 10.0, 15.0, 25.0, 15.0, 10.0, 5.0, 0.0,
-             -5.0, -10.0, -15.0, -25.0, -15.0, -10.0, -5.0, 0.0],
-    help="apply_angle sequence in degrees (default: symmetric ±25° sweep)",
+    default=[0.0, 10.0, 25.0],
+    help="apply_angle sequence in degrees (default: 0, 10, 25 — ~5 s total)",
   )
   args = parser.parse_args()
 
