@@ -12,6 +12,12 @@ Ecu = CarParams.Ecu
 class CarControllerParams:
   STEER_STEP = 1  # 100 Hz LCA command frequency (controlsd runs at 100 Hz)
 
+  # Max commanded-vs-actual steering angle error (deg). Stock Volvo Pilot Assist holds
+  # commanded within ~1.7° of actual even under sustained driver override; bounding the
+  # command to actual ± this error prevents the stale-command snap-back that causes
+  # aggressive post-release overcorrection.
+  ANGLE_ERROR = 3.0
+
   # Angle limits for rate limiting
   ANGLE_LIMITS: AngleSteeringLimits = AngleSteeringLimits(
     540, # deg - 1.5 turns to lock
