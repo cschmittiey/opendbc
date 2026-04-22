@@ -1,6 +1,9 @@
+import numpy as np
+
 from opendbc.can.packer import CANPacker
 from opendbc.car import Bus
 from opendbc.car.interfaces import CarControllerBase
+from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.volvo.helpers import LCA3CounterSync
 from opendbc.car.volvo.live_testing import LiveTestingManager
 from opendbc.car.volvo.volvocan import create_lca_message, create_pscm_message, create_lca_3_message, create_lca_2_message, create_lca_4_message, create_lca_5_message, create_lca_6_message, create_lca_7_message, create_speed_message, create_speed_2_message, create_speed_3_message, create_0x1a_message, create_gear_position_message, create_egsm_message, create_pscm_related_message
@@ -62,17 +65,25 @@ class CarController(CarControllerBase):
       # Get desired steering angle from controlsd (LatControlAngle)
       apply_angle = actuators.steeringAngleDeg  # degrees
 
-      if not CC.latActive:
-        apply_angle = CS.out.steeringAngleDeg  # Use current angle when inactive
+      # Clamp commanded angle to actual ± ANGLE_ERROR. Without this, a driver override
+      # lets the model's plan drift far from the wheel's actual position; on release,
+      # the EPS slams back toward that stale command and overshoots. Stock Volvo Pilot
+      # Assist keeps this gap inside ~2° even under sustained override.
+      apply_angle = float(np.clip(
+        apply_angle,
+        CS.out.steeringAngleDeg - CarControllerParams.ANGLE_ERROR,
+        CS.out.steeringAngleDeg + CarControllerParams.ANGLE_ERROR,
+      ))
 
-      # Override apply_angle from live testing config if provided
+      # Rate limit + inactive passthrough (apply_angle = steering angle when not lat_active)
+      apply_angle = apply_std_steer_angle_limits(apply_angle, self.apply_angle_last, CS.out.vEgoRaw,
+                                                 CS.out.steeringAngleDeg, lat_active, CarControllerParams.ANGLE_LIMITS)
+
+      # Override apply_angle from live testing config if provided (bypasses limits for testing)
       if self.liveTestingConfig:
         override_apply_angle = self.liveTestingConfig.get('apply_angle')
         if override_apply_angle is not None:
           apply_angle = override_apply_angle
-
-      # No rate limiting initially - apply desired angle directly
-      # TODO: Add rate limiting after basic functionality is confirmed
 
       # LCA - 0x58 - 100 Hz (angle-based)
       lca_overrides = self.liveTestingConfig.get('lca') if self.liveTestingConfig else None
