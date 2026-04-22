@@ -60,10 +60,13 @@ class CarState(CarStateBase):
     # BRAKE_PEDAL_PRESSED_A goes active when user starts pressing brake pedal, but no brake light is on yet due to tolerance
     # BRAKE_PEDAL_PRESSED_B goes active when when the brake pedal is pressed above minimum threshold, brake light is on
     ret.brakePressed = cp_main.vl["LCA_2"]["BRAKE_PEDAL_PRESSED_B"] == 1
-    ret.parkingBrake = False # TODO: add parking brake
+    ret.parkingBrake = cp_party.vl['EGSM']['PARKING_BRAKE_BUTTON'] == 1
 
     # stability control - becomes true when ESC intervenes (e.g., aquaplaning)
     ret.espActive = cp_main.vl["LCA_2"]["ESC_ACTUATING"] == 1 and cp_main.vl["LCA_2"]["ESC_ELIGIBLE"] == 1
+
+    # stock AEB: disengage openpilot when the car's forward-collision system intervenes
+    ret.stockAeb = bool(cp_main.vl['GEAR_POSITION']['AEB_A']) or bool(cp_main.vl['GEAR_POSITION']['AEB_B'])
 
     # steering wheel
     ret.steeringAngleDeg = cp_party.vl['PSCM']['PSCM_ANGLE_SENSOR'] # openpilot expects a negative value for a right turn
