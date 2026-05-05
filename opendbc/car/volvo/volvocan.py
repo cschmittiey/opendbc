@@ -3,6 +3,7 @@ from opendbc.car.volvo.helpers import checksum_lca_2_message, checksum_2_0x69_me
 from opendbc.car.carlog import carlog
 
 def create_lca_message(packer, lat_active: bool, apply_angle: float, msg_lca: dict,
+                       authority_pos: int = 614, authority_neg: int = -614,
                        overrides: dict | None = None):
   """
   Create LCA (Lane Centering Assist) steering command for Volvo CMA platform.
@@ -17,6 +18,11 @@ def create_lca_message(packer, lat_active: bool, apply_angle: float, msg_lca: di
     lat_active: Whether lateral control is active
     apply_angle: Steering angle in degrees (positive = left, negative = right)
     msg_lca: Dictionary containing LCA message values
+    authority_pos: LCA_STEER_LOOSELY value [0..614] — right-pull torque-authority
+                   envelope. Saturated (614) for stock-equivalent stiff feel; the
+                   carcontroller envelope tracker collapses this on driver override
+                   and rebuilds slowly to reproduce stock PA's easy-override feel.
+    authority_neg: LCA_STEER_LOOSELY_INV value [-614..0] — left-pull authority.
     overrides: Optional dict of signal overrides (keys are UPPERCASE DBC signal names)
   """
   if not lat_active:
@@ -29,9 +35,9 @@ def create_lca_message(packer, lat_active: bool, apply_angle: float, msg_lca: di
     'NEW_SIGNAL_1': 3,
     'LCA_ENABLE_INV': 0 if lat_active else 1,
     'LANE_KEEP_ACTIVE_INV': 3,
-    'LCA_STEER_LOOSELY': 614 if lat_active else 0,
+    'LCA_STEER_LOOSELY': int(authority_pos) if lat_active else 0,
     'NEW_SIGNAL_7': 7,
-    'LCA_STEER_LOOSELY_INV': -614 if lat_active else 0,
+    'LCA_STEER_LOOSELY_INV': int(authority_neg) if lat_active else 0,
     'LCA_RATE_OF_CHANGE': 80 if lat_active else 251, # Steering rate - Stock LCA increased from 35 to 39 steppedly when steering request was overriden by openpilot that couldn't steer enough
     'LCA_STEER': msg_lca['LCA_STEER'],
     'NEW_SIGNAL_6': 15,

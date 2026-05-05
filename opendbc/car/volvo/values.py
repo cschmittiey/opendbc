@@ -18,6 +18,36 @@ class CarControllerParams:
   # aggressive post-release overcorrection.
   ANGLE_ERROR = 3.0
 
+  # LCA torque-authority envelope, modeled after stock Pilot Assist behavior.
+  # LCA_STEER_LOOSELY (positive arm) and LCA_STEER_LOOSELY_INV (negative arm)
+  # form a directional envelope that PSCM applies to its EPS torque. Stock PA:
+  #  - holds both arms at saturation (±LCA_AUTH_MAX) when no driver torque
+  #  - on driver override, collapses both arms symmetrically at COLLAPSE_RATE
+  #    until envelope reaches ~±LCA_AUTH_SPLIT, then splits asymmetrically:
+  #    the arm matching driver direction (yielding) settles at ±PLATEAU_YIELD,
+  #    the counter arm holds at ±PLATEAU_COUNTER (yield is shallower than counter)
+  #  - rebuilds at REBUILD_RATE after release (~3 s back to saturation)
+  # See route_analysis/lca_override_mechanism.md for the data behind these.
+  LCA_AUTH_MAX = 614              # signal saturation
+  LCA_AUTH_PLATEAU_COUNTER = 130  # counter-arm magnitude during sustained override
+  # Override trigger threshold on |CS.out.steeringTorque| (op-convention raw
+  # units, mirror of DRIVER_INPUT). Must be ABOVE the resting-hand noise floor
+  # (CS.steeringPressed uses |raw|>2 as a sensitive DM-fallback floor and does
+  # NOT indicate override intent — don't use it for envelope triggering).
+  LCA_AUTH_OVERRIDE_THRESH = 7
+  # Yield-arm plateau scales with driver-torque magnitude so brief strong presses
+  # (potholes, lane corrections) get full yield while light sustained pressure
+  # only gets a soft yield. yield_signed = YIELD_BASE − YIELD_SLOPE *
+  # max(0, |steeringTorque| − OVERRIDE_THRESH), clamped to [YIELD_MIN, YIELD_BASE].
+  # At |drv|=7 (just over threshold): yield = +60 (light resistance).
+  # At |drv|=14: yield ≈ -4 (crosses past zero — EPS hands wheel to driver).
+  LCA_AUTH_YIELD_BASE = 60        # yield-arm magnitude at the override threshold
+  LCA_AUTH_YIELD_SLOPE = 8        # counts of yield reduction per unit |drv torque| above threshold
+  LCA_AUTH_YIELD_MIN = -30        # cap how far past zero the yield arm can go (full hand-over)
+  LCA_AUTH_SPLIT = 200            # symmetric → asymmetric handover
+  LCA_AUTH_REBUILD_RATE = 230     # counts/s (≈ 2.7 s rebuild from 0 to 614)
+  LCA_AUTH_COLLAPSE_RATE = 2500   # counts/s base (scales with |drv|/THRESH for sharper pothole jolts)
+
   # Angle limits for rate limiting
   ANGLE_LIMITS: AngleSteeringLimits = AngleSteeringLimits(
     540, # deg - 1.5 turns to lock

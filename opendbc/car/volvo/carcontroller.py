@@ -41,6 +41,14 @@ class CarController(CarControllerBase):
     self.lca_7_acc = 0  # Bresenham accumulator for 29 Hz
     self.lca_7_last_steer = 0 # used to calculate change in steer from last update
 
+    # LCA torque-authority envelope state. Both arms are persistent across frames.
+    # See CarControllerParams.LCA_AUTH_* and route_analysis/lca_override_mechanism.md.
+    # When lat_active goes True they ramp up from 0 to ±MAX at REBUILD_RATE; on
+    # driver override they collapse at COLLAPSE_RATE (symmetric until SPLIT, then
+    # asymmetric: yielding arm → 0, counter arm holds at ±PLATEAU).
+    self.lca_auth_pos = 0.0
+    self.lca_auth_neg = 0.0
+
   def update(self, CC, CS, now_nanos):
     CS.CC_frame = self.frame
     can_sends = []
@@ -85,9 +93,64 @@ class CarController(CarControllerBase):
         if override_apply_angle is not None:
           apply_angle = override_apply_angle
 
+      # Update LCA torque-authority envelope (replicates stock Pilot Assist's
+      # easy-override and bounce-free release). Stock holds both arms at ±614
+      # in steady state; on override the arms collapse to a shifted plateau
+      # (counter arm deeper than yielding arm); rebuilds at +230 c/s.
+      P = CarControllerParams
+      DT = 0.01  # 100 Hz
+      # Override trigger uses an explicit |steeringTorque| threshold rather than
+      # CS.steeringPressed, which is a very-sensitive DM-fallback floor (raw>2)
+      # — fires from resting hands alone and is not an override-intent signal.
+      drv_mag = abs(CS.out.steeringTorque)
+      overriding = drv_mag > P.LCA_AUTH_OVERRIDE_THRESH
+      # Collapse rate scales with driver torque so a sharp pothole jolt drops the
+      # envelope faster than a soft sustained press.
+      collapse_rate = P.LCA_AUTH_COLLAPSE_RATE * max(1.0, drv_mag / float(P.LCA_AUTH_OVERRIDE_THRESH))
+      step = collapse_rate * DT
+      if not lat_active:
+        self.lca_auth_pos = 0.0
+        self.lca_auth_neg = 0.0
+      elif overriding:
+        if self.lca_auth_pos > P.LCA_AUTH_SPLIT or -self.lca_auth_neg > P.LCA_AUTH_SPLIT:
+          # Symmetric collapse phase: both arms shrink toward ±SPLIT
+          self.lca_auth_pos = max(float(P.LCA_AUTH_SPLIT), self.lca_auth_pos - step)
+          self.lca_auth_neg = min(-float(P.LCA_AUTH_SPLIT), self.lca_auth_neg + step)
+        else:
+          # Asymmetric plateau phase. CS.out.steeringTorque > 0 in openpilot
+          # convention = driver pushing right → yields right authority
+          # (LOOSELY/+ arm), retains left (INV/- arm).
+          # Yield arm scales with |drv| above OVERRIDE_THRESH — strong presses
+          # (potholes, hard corrections) cross past zero so EPS hands the wheel
+          # to the driver in their direction.
+          excess = max(0.0, drv_mag - float(P.LCA_AUTH_OVERRIDE_THRESH))
+          yield_signed = float(P.LCA_AUTH_YIELD_BASE) - P.LCA_AUTH_YIELD_SLOPE * excess
+          yield_signed = max(float(P.LCA_AUTH_YIELD_MIN), min(yield_signed, float(P.LCA_AUTH_YIELD_BASE)))
+          if CS.out.steeringTorque > 0:  # driver pushing right
+            target_pos = yield_signed                              # yield arm (+ side)
+            target_neg = -float(P.LCA_AUTH_PLATEAU_COUNTER)        # counter arm
+          else:  # driver pushing left (or zero — default to symmetric collapse direction)
+            target_pos = float(P.LCA_AUTH_PLATEAU_COUNTER)         # counter arm
+            target_neg = -yield_signed                             # yield arm (− side)
+          # Drive each arm toward its plateau target at COLLAPSE_RATE
+          self.lca_auth_pos = max(target_pos, self.lca_auth_pos - step) \
+                              if self.lca_auth_pos > target_pos \
+                              else min(target_pos, self.lca_auth_pos + step)
+          self.lca_auth_neg = min(target_neg, self.lca_auth_neg + step) \
+                              if self.lca_auth_neg < target_neg \
+                              else max(target_neg, self.lca_auth_neg - step)
+      else:
+        # No override → rebuild both arms toward saturation
+        rebuild_step = P.LCA_AUTH_REBUILD_RATE * DT
+        self.lca_auth_pos = min(float(P.LCA_AUTH_MAX), self.lca_auth_pos + rebuild_step)
+        self.lca_auth_neg = max(-float(P.LCA_AUTH_MAX), self.lca_auth_neg - rebuild_step)
+
       # LCA - 0x58 - 100 Hz (angle-based)
       lca_overrides = self.liveTestingConfig.get('lca') if self.liveTestingConfig else None
-      can_sends.append(create_lca_message(self.packer, lat_active, apply_angle, CS.msg_lca, lca_overrides))
+      can_sends.append(create_lca_message(self.packer, lat_active, apply_angle, CS.msg_lca,
+                                          authority_pos=int(round(self.lca_auth_pos)),
+                                          authority_neg=int(round(self.lca_auth_neg)),
+                                          overrides=lca_overrides))
       self.apply_angle_last = apply_angle
 
       # Check if PA hands-on-wheel spoof toggle is enabled (bit 7 of alternativeExperience)
