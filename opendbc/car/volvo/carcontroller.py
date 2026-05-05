@@ -53,10 +53,17 @@ class CarController(CarControllerBase):
     # the brief-yield window is active and does not re-arm during that window.
     self.lca_auth_drv_prev = 0.0
     self.lca_auth_light_frames = 0
+    # Frames since real_override was last active — used to gate light_collapse
+    # re-arming during active co-steering (must be > LIGHT_COOLDOWN_FRAMES).
+    self.lca_auth_real_off_frames = 1000  # large initial → light can fire immediately
     # Override-mode latch with hysteresis (enter at ENTER, exit at EXIT).
     # Prevents threshold flapping when driver torque hovers near the boundary,
     # which caused ~10 Hz EPS-torque ripple felt during lane-change overrides.
     self.lca_auth_override_active = False
+    # LP-filtered |drv| for yield-arm magnitude calculation. Suppresses 1-2
+    # unit driver-torque jitter that would otherwise propagate (~10x amplified
+    # via YIELD_SLOPE) into envelope ripple felt at the wheel.
+    self.lca_auth_drv_mag_filt = 0.0
 
   def update(self, CC, CS, now_nanos):
     CS.CC_frame = self.frame
@@ -112,21 +119,13 @@ class CarController(CarControllerBase):
       # CS.steeringPressed, which is a very-sensitive DM-fallback floor (raw>2)
       # — fires from resting hands alone and is not an override-intent signal.
       drv_mag = abs(CS.out.steeringTorque)
-      # Per-frame rising edge into the "light contact" zone (|drv| in
-      # [LIGHT_THRESH, OVERRIDE_THRESH], increasing by at least RISE_DELTA).
-      # Arm a brief-yield window so the EPS gives a small haptic acknowledgment.
-      # Don't re-arm while the window is active — sustained elevated torque
-      # produces ONE yield, then rebuilds. New rising contact re-arms once the
-      # window expires.
       drv_rate = drv_mag - self.lca_auth_drv_prev
       self.lca_auth_drv_prev = drv_mag
-      if (drv_mag > P.LCA_AUTH_LIGHT_THRESH and
-          drv_rate > P.LCA_AUTH_LIGHT_RISE_DELTA and
-          self.lca_auth_light_frames == 0):
-        self.lca_auth_light_frames = P.LCA_AUTH_LIGHT_HOLD_FRAMES
-      else:
-        self.lca_auth_light_frames = max(0, self.lca_auth_light_frames - 1)
-      light_collapse = self.lca_auth_light_frames > 0
+      # LP filter on |drv| used for yield-arm magnitude — absorbs 1-2 unit
+      # driver-torque jitter that would otherwise propagate into ~10 unit
+      # envelope ripple via the YIELD_SLOPE multiplier.
+      self.lca_auth_drv_mag_filt = ((1.0 - P.LCA_AUTH_YIELD_LP_ALPHA) * self.lca_auth_drv_mag_filt
+                                    + P.LCA_AUTH_YIELD_LP_ALPHA * drv_mag)
       # Hysteretic override latch — enter at ENTER, hold until drv drops below
       # EXIT. Eliminates ~10 Hz envelope flapping when |drv| hovers near a
       # single threshold during sustained co-steering.
@@ -135,6 +134,25 @@ class CarController(CarControllerBase):
       elif self.lca_auth_override_active and drv_mag < P.LCA_AUTH_OVERRIDE_EXIT:
         self.lca_auth_override_active = False
       real_override = self.lca_auth_override_active
+      # Track frames since real_override was last active. Used to gate light
+      # contact re-firing — light_collapse must NOT trigger while the driver
+      # is actively co-steering (real_override repeatedly entering/exiting).
+      if real_override:
+        self.lca_auth_real_off_frames = 0
+      else:
+        self.lca_auth_real_off_frames += 1
+      # Per-frame rising edge into the "light contact" zone arms a brief-yield
+      # window for haptic acknowledgment of hand-on-wheel. Suppressed while
+      # the window is already active OR real_override has been off less than
+      # LIGHT_COOLDOWN_FRAMES (i.e., user is actively co-steering).
+      if (drv_mag > P.LCA_AUTH_LIGHT_THRESH and
+          drv_rate > P.LCA_AUTH_LIGHT_RISE_DELTA and
+          self.lca_auth_light_frames == 0 and
+          self.lca_auth_real_off_frames > P.LCA_AUTH_LIGHT_COOLDOWN_FRAMES):
+        self.lca_auth_light_frames = P.LCA_AUTH_LIGHT_HOLD_FRAMES
+      else:
+        self.lca_auth_light_frames = max(0, self.lca_auth_light_frames - 1)
+      light_collapse = self.lca_auth_light_frames > 0
       overriding = real_override or light_collapse
       # Collapse rate scales with driver torque so a sharp pothole jolt drops the
       # envelope faster than a soft sustained press. Floor at base rate so light
@@ -147,6 +165,8 @@ class CarController(CarControllerBase):
         self.lca_auth_drv_prev = 0.0
         self.lca_auth_light_frames = 0
         self.lca_auth_override_active = False
+        self.lca_auth_drv_mag_filt = 0.0
+        self.lca_auth_real_off_frames = 1000
       elif overriding:
         if self.lca_auth_pos > P.LCA_AUTH_SPLIT or -self.lca_auth_neg > P.LCA_AUTH_SPLIT:
           # Symmetric collapse phase: both arms shrink toward ±SPLIT
@@ -159,7 +179,7 @@ class CarController(CarControllerBase):
           # Yield arm scales with |drv| above OVERRIDE_THRESH — strong presses
           # (potholes, hard corrections) cross past zero so EPS hands the wheel
           # to the driver in their direction.
-          excess = max(0.0, drv_mag - float(P.LCA_AUTH_OVERRIDE_ENTER))
+          excess = max(0.0, self.lca_auth_drv_mag_filt - float(P.LCA_AUTH_OVERRIDE_ENTER))
           yield_signed = float(P.LCA_AUTH_YIELD_BASE) - P.LCA_AUTH_YIELD_SLOPE * excess
           yield_signed = max(float(P.LCA_AUTH_YIELD_MIN), min(yield_signed, float(P.LCA_AUTH_YIELD_BASE)))
           if CS.out.steeringTorque > 0:  # driver pushing right
