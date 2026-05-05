@@ -48,6 +48,11 @@ class CarController(CarControllerBase):
     # asymmetric: yielding arm → 0, counter arm holds at ±PLATEAU).
     self.lca_auth_pos = 0.0
     self.lca_auth_neg = 0.0
+    # "Light contact" rising-edge detector for haptic-ack on resting hands.
+    # Per-frame |drv| derivative; LIGHT_HOLD_FRAMES counter ticks down while
+    # the brief-yield window is active and does not re-arm during that window.
+    self.lca_auth_drv_prev = 0.0
+    self.lca_auth_light_frames = 0
 
   def update(self, CC, CS, now_nanos):
     CS.CC_frame = self.frame
@@ -103,14 +108,33 @@ class CarController(CarControllerBase):
       # CS.steeringPressed, which is a very-sensitive DM-fallback floor (raw>2)
       # — fires from resting hands alone and is not an override-intent signal.
       drv_mag = abs(CS.out.steeringTorque)
-      overriding = drv_mag > P.LCA_AUTH_OVERRIDE_THRESH
+      # Per-frame rising edge into the "light contact" zone (|drv| in
+      # [LIGHT_THRESH, OVERRIDE_THRESH], increasing by at least RISE_DELTA).
+      # Arm a brief-yield window so the EPS gives a small haptic acknowledgment.
+      # Don't re-arm while the window is active — sustained elevated torque
+      # produces ONE yield, then rebuilds. New rising contact re-arms once the
+      # window expires.
+      drv_rate = drv_mag - self.lca_auth_drv_prev
+      self.lca_auth_drv_prev = drv_mag
+      if (drv_mag > P.LCA_AUTH_LIGHT_THRESH and
+          drv_rate > P.LCA_AUTH_LIGHT_RISE_DELTA and
+          self.lca_auth_light_frames == 0):
+        self.lca_auth_light_frames = P.LCA_AUTH_LIGHT_HOLD_FRAMES
+      else:
+        self.lca_auth_light_frames = max(0, self.lca_auth_light_frames - 1)
+      light_collapse = self.lca_auth_light_frames > 0
+      real_override = drv_mag > P.LCA_AUTH_OVERRIDE_THRESH
+      overriding = real_override or light_collapse
       # Collapse rate scales with driver torque so a sharp pothole jolt drops the
-      # envelope faster than a soft sustained press.
+      # envelope faster than a soft sustained press. Floor at base rate so light
+      # contact still produces a perceptible (but small) dip.
       collapse_rate = P.LCA_AUTH_COLLAPSE_RATE * max(1.0, drv_mag / float(P.LCA_AUTH_OVERRIDE_THRESH))
       step = collapse_rate * DT
       if not lat_active:
         self.lca_auth_pos = 0.0
         self.lca_auth_neg = 0.0
+        self.lca_auth_drv_prev = 0.0
+        self.lca_auth_light_frames = 0
       elif overriding:
         if self.lca_auth_pos > P.LCA_AUTH_SPLIT or -self.lca_auth_neg > P.LCA_AUTH_SPLIT:
           # Symmetric collapse phase: both arms shrink toward ±SPLIT

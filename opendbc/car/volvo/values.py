@@ -35,6 +35,18 @@ class CarControllerParams:
   # (CS.steeringPressed uses |raw|>2 as a sensitive DM-fallback floor and does
   # NOT indicate override intent — don't use it for envelope triggering).
   LCA_AUTH_OVERRIDE_THRESH = 7
+  # "Light contact" / haptic-acknowledgment region. When |drv| crosses into
+  # [LIGHT_THRESH, OVERRIDE_THRESH] from below, briefly collapse the envelope
+  # for LIGHT_HOLD_FRAMES (a haptic confirmation of hand-on-wheel detection),
+  # then rebuild even while the contact persists. Prevents the driver from
+  # needing to sustain force just to feel that the system noticed them — helps
+  # with hand-fatigue / RSI.
+  # Rising edge detected via per-frame derivative; the brief-yield window does
+  # NOT re-arm while still active, so a steady elevated torque only triggers
+  # one yield and then the envelope rebuilds.
+  LCA_AUTH_LIGHT_THRESH = 3       # min |drv| to consider as contact
+  LCA_AUTH_LIGHT_RISE_DELTA = 1.0 # min per-frame increase in |drv| to count as rising contact
+  LCA_AUTH_LIGHT_HOLD_FRAMES = 15 # ~150 ms of yield on fresh light contact
   # Yield-arm plateau scales with driver-torque magnitude so brief strong presses
   # (potholes, lane corrections) get full yield while light sustained pressure
   # only gets a soft yield. yield_signed = YIELD_BASE − YIELD_SLOPE *
