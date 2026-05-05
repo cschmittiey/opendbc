@@ -30,11 +30,16 @@ class CarControllerParams:
   # See route_analysis/lca_override_mechanism.md for the data behind these.
   LCA_AUTH_MAX = 614              # signal saturation
   LCA_AUTH_PLATEAU_COUNTER = 130  # counter-arm magnitude during sustained override
-  # Override trigger threshold on |CS.out.steeringTorque| (op-convention raw
+  # Override trigger thresholds on |CS.out.steeringTorque| (op-convention raw
   # units, mirror of DRIVER_INPUT). Must be ABOVE the resting-hand noise floor
   # (CS.steeringPressed uses |raw|>2 as a sensitive DM-fallback floor and does
   # NOT indicate override intent — don't use it for envelope triggering).
-  LCA_AUTH_OVERRIDE_THRESH = 7
+  # Hysteresis: enter override at ENTER, exit at EXIT (< ENTER) to prevent the
+  # envelope flapping between collapse and rebuild when driver torque hovers
+  # near a single threshold (was causing ~10 Hz EPS-torque ripple in lane
+  # changes when driver applied 6-8 raw to "ride along" with op).
+  LCA_AUTH_OVERRIDE_ENTER = 7
+  LCA_AUTH_OVERRIDE_EXIT = 4
   # "Light contact" / haptic-acknowledgment region. When |drv| crosses into
   # [LIGHT_THRESH, OVERRIDE_THRESH] from below, briefly collapse the envelope
   # for LIGHT_HOLD_FRAMES (a haptic confirmation of hand-on-wheel detection),
