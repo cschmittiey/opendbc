@@ -38,8 +38,8 @@ class CarControllerParams:
   # envelope flapping between collapse and rebuild when driver torque hovers
   # near a single threshold (was causing ~10 Hz EPS-torque ripple in lane
   # changes when driver applied 6-8 raw to "ride along" with op).
-  LCA_AUTH_OVERRIDE_ENTER = 7
-  LCA_AUTH_OVERRIDE_EXIT = 4
+  LCA_AUTH_OVERRIDE_ENTER = 5
+  LCA_AUTH_OVERRIDE_EXIT = 3
   # "Light contact" / haptic-acknowledgment region. When |drv| crosses into
   # [LIGHT_THRESH, OVERRIDE_THRESH] from below, briefly collapse the envelope
   # for LIGHT_HOLD_FRAMES (a haptic confirmation of hand-on-wheel detection),
