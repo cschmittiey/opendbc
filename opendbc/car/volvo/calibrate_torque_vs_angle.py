@@ -141,12 +141,11 @@ class TorqueVsAngleCalibrator:
     gap = target_angle - mean_ang
 
     ts = time.time()
-    for i, (tq, ang) in enumerate(zip(tq_samples, ang_samples)):
+    for i, (tq, ang) in enumerate(zip(tq_samples, ang_samples, strict=True)):
       log_file.write(f"{ts},{target_angle:.3f},{ang:.3f},{tq:.3f},{i}\n")
     log_file.flush()
 
-    print(f"  target={target_angle:+.1f}°  actual={mean_ang:+.2f}°  "
-          f"gap={gap:+.2f}°  tq={mean_tq:+.2f} Nm  (std {std_tq:.2f})")
+    print(f"  target={target_angle:+.1f}°  actual={mean_ang:+.2f}°  gap={gap:+.2f}°  tq={mean_tq:+.2f} Nm  (std {std_tq:.2f})")
     return {"target": target_angle, "actual": mean_ang, "gap": gap,
             "torque": mean_tq, "torque_std": std_tq}
 
@@ -157,8 +156,7 @@ class TorqueVsAngleCalibrator:
       self.sm.update(timeout=100)
       if self.sm.updated['carState']:
         cs = self.sm['carState']
-        print(f"Connected. Initial angle={cs.steeringAngleDeg:+.1f}°, "
-              f"torque={cs.steeringTorque:+.2f} Nm")
+        print(f"Connected. Initial angle={cs.steeringAngleDeg:+.1f}°, torque={cs.steeringTorque:+.2f} Nm")
         return True
       time.sleep(0.1)
     print("ERROR: No carState messages. Is openpilot running?")
@@ -209,15 +207,14 @@ class TorqueVsAngleCalibrator:
     print(f"{'target°':>10} {'actual°':>10} {'gap°':>8} {'tq_Nm':>10} {'std_Nm':>8}")
     print("-" * 50)
     for r in self.results:
-      print(f"{r['target']:>+10.1f} {r['actual']:>+10.2f} {r['gap']:>+8.2f} "
-            f"{r['torque']:>+10.2f} {r['torque_std']:>8.2f}")
+      print(f"{r['target']:>+10.1f} {r['actual']:>+10.2f} {r['gap']:>+8.2f} {r['torque']:>+10.2f} {r['torque_std']:>8.2f}")
 
     gaps = [r['gap'] for r in self.results]
     torques = [r['torque'] for r in self.results]
 
     mg = statistics.mean(gaps)
     mt = statistics.mean(torques)
-    num = sum((g - mg) * (t - mt) for g, t in zip(gaps, torques))
+    num = sum((g - mg) * (t - mt) for g, t in zip(gaps, torques, strict=True))
     den = sum((g - mg) ** 2 for g in gaps)
     if abs(den) < 1e-10:
       print("\nERROR: all gap values equal; cannot fit.")
@@ -225,7 +222,7 @@ class TorqueVsAngleCalibrator:
 
     k = num / den
     b = mt - k * mg
-    ss_res = sum((t - (k * g + b)) ** 2 for g, t in zip(gaps, torques))
+    ss_res = sum((t - (k * g + b)) ** 2 for g, t in zip(gaps, torques, strict=True))
     ss_tot = sum((t - mt) ** 2 for t in torques)
     r_sq = 1 - ss_res / ss_tot if ss_tot > 1e-10 else 0.0
 
@@ -248,8 +245,7 @@ def main() -> None:
   parser.add_argument(
     "--steps", type=float, nargs="*",
     default=[0.0, 5.0, 10.0, 15.0, 25.0, 0.0, -25.0],
-    help="apply_angle sequence (default: 0, 5, 10, 15, 25, 0, -25 — ~10.5 s). "
-         "The pass through 0 before the negative avoids a sudden +25 to -25 reversal.",
+    help="apply_angle sequence (default: 0, 5, 10, 15, 25, 0, -25 — ~10.5 s). The pass through 0 before the negative avoids a sudden +25 to -25 reversal.",
   )
   args = parser.parse_args()
 
