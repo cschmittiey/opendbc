@@ -137,43 +137,65 @@ static bool volvo_tx_hook(const CANPacket_t *msg) {
   bool tx = true;
 
   // Very relaxed safety policy - only basic frame ID checks
+  // NOTE: the wrong-bus rejections below are unreachable defense-in-depth:
+  // safety_tx_hook() only calls this hook after the message passes the
+  // VOLVO_TX_MSGS allowlist, which already pins each TX address to a single
+  // bus (and VOLVO_DRIVER_INPUT/VOLVO_SAS are not TX'able on any bus).
+  // Hence the GCOV_EXCL markers, following the defaults.h convention.
+  // test_volvo.py's test_tx_hook_wrong_bus_blocked pins down the blocked
+  // wrong-bus TX behavior at the safety_tx_hook() level.
   if (msg->addr == VOLVO_LCA_STEER) {
     // LCA message flows: VCU1 (main bus) -> PSCM (party bus)
     // We're acting as VCU1, so we send LCA message to party bus (bus 2)
+    // GCOV_EXCL_START
+    // Unreachable by design (allowlist pins VOLVO_LCA_STEER to the party bus)
     if (msg->bus != VOLVO_PARTY_BUS) {
       tx = false;  // Wrong bus
     }
+    // GCOV_EXCL_STOP
   }
 
   if (msg->addr == VOLVO_PSCM) {
     // PSCM message: we relay from party bus (bus 2) to main bus (bus 0)
     // So we TX on main bus (bus 0)
+    // GCOV_EXCL_START
+    // Unreachable by design (allowlist pins VOLVO_PSCM to the main bus)
     if (msg->bus != VOLVO_MAIN_BUS) {
       tx = false;  // Wrong bus
     }
+    // GCOV_EXCL_STOP
   }
 
   if (msg->addr == VOLVO_DRIVER_INPUT) {
     // Driver input message: we relay from party bus (bus 2) to main bus (bus 0)
     // So we TX on main bus (bus 0)
+    // GCOV_EXCL_START
+    // Unreachable by design (VOLVO_DRIVER_INPUT is not in VOLVO_TX_MSGS)
     if (msg->bus != VOLVO_MAIN_BUS) {
       tx = false;  // Wrong bus
     }
   }
+  // GCOV_EXCL_STOP
 
   if (msg->addr == VOLVO_SAS) {
     // SAS message: we relay from party bus (bus 2) to main bus (bus 0)
     // So we TX on main bus (bus 0)
+    // GCOV_EXCL_START
+    // Unreachable by design (VOLVO_SAS is not in VOLVO_TX_MSGS)
     if (msg->bus != VOLVO_MAIN_BUS) {
       tx = false;  // Wrong bus
     }
   }
+  // GCOV_EXCL_STOP
 
   if (msg->addr == VOLVO_LCA_2) {
     // LCA_2 -> PSCM
+    // GCOV_EXCL_START
+    // Unreachable by design (allowlist pins VOLVO_LCA_2 to the party bus)
     if (msg->bus != VOLVO_PARTY_BUS) {
       tx = false;  // Wrong bus
     }
+    // GCOV_EXCL_STOP
   }
 
   return tx;

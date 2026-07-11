@@ -45,6 +45,8 @@ VOLVO_LCA_6         = 0x97
 VOLVO_LCA_7         = 0x92
 VOLVO_PSCM          = 0x16
 VOLVO_PSCM_RELATED  = 0x17
+VOLVO_SAS           = 0x55
+VOLVO_DRIVER_INPUT  = 0x15
 
 # Addresses panda TX'd with .check_relay = true, grouped by bus
 _TX_PARTY_BUS_ADDRS = (
@@ -120,6 +122,26 @@ class TestVolvoSafetyBase(common.CarSafetyTest):
     return None
 
   # ---- Volvo-specific consistency tests ----
+
+  def test_tx_hook_wrong_bus_blocked(self):
+    """
+    Every TX address is pinned to exactly one bus by the VOLVO_TX_MSGS
+    allowlist, which safety_tx_hook() enforces before volvo_tx_hook() runs.
+    TX attempts anywhere off the allowlisted bus must be rejected, even with
+    controls allowed. Also covers the relayed-RX addresses (SAS, DRIVER_INPUT)
+    that volvo_tx_hook() used to re-check: they are not TX'able on any bus.
+    """
+    tx_msgs = {tuple(m) for m in self.TX_MSGS}
+    addrs = {addr for addr, _ in tx_msgs} | {VOLVO_SAS, VOLVO_DRIVER_INPUT}
+    self.safety.set_controls_allowed(True)
+    for addr in sorted(addrs):
+      for bus in range(4):
+        if (addr, bus) in tx_msgs:
+          self.assertTrue(self._tx(common.make_msg(bus, addr)),
+                          f"blocked TX addr={hex(addr)} on allowlisted bus={bus}")
+        else:
+          self.assertFalse(self._tx(common.make_msg(bus, addr)),
+                           f"allowed TX addr={hex(addr)} on wrong bus={bus}")
 
   def test_gas_threshold_self_consistent(self):
     """
