@@ -261,7 +261,7 @@
 |Nissan|Rogue 2018-20|ProPILOT Assist|[Upstream](#upstream)|
 |Nissan|X-Trail 2017|ProPILOT Assist|[Upstream](#upstream)|
 |Peugeot|208 2019-25|Adaptive Cruise Control (ACC) & Lane Assist|[Dashcam mode](#dashcam)|
-|Polestar|2 2020+|Pilot Assist & Adaptive Cruise Control|[Upstream](#upstream)|
+|Polestar|2 2020-25|Pilot Assist & Adaptive Cruise Control|[Upstream](#upstream)|
 |Porsche|Macan 2017-24|Adaptive Cruise Control (ACC) & Lane Assist|[Dashcam mode](#dashcam)|
 |Ram|1500 2019-24|Adaptive Cruise Control (ACC)|[Upstream](#upstream)|
 |Ram|2500 2020-24|Adaptive Cruise Control (ACC)|[Dashcam mode](#dashcam)|
@@ -405,7 +405,7 @@
 |Volkswagen|Tiguan eHybrid 2021-23|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |Volkswagen|Touran 2016-23|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |Volvo|S60 Recharge 2024|Pilot Assist & Adaptive Cruise Control|[Upstream](#upstream)|
-|Volvo|XC40 Recharge 2021-2023|Pilot Assist & Adaptive Cruise Control|[Upstream](#upstream)|
+|Volvo|XC40 Recharge 2021-23|Pilot Assist & Adaptive Cruise Control|[Upstream](#upstream)|
 
 # Types of Support
 

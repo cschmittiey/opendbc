@@ -6,7 +6,8 @@ from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.volvo.helpers import LCA3CounterSync
 from opendbc.car.volvo.live_testing import LiveTestingManager
-from opendbc.car.volvo.volvocan import create_lca_message, create_pscm_message, create_lca_3_message, create_lca_2_message, create_lca_4_message, create_lca_5_message, create_lca_6_message, create_lca_7_message, create_speed_message, create_speed_2_message, create_speed_3_message, create_0x1a_message, create_gear_position_message, create_egsm_message, create_pscm_related_message
+from opendbc.car.volvo.volvocan import (create_lca_message, create_pscm_message, create_lca_3_message, create_lca_2_message, create_lca_4_message,
+                                        create_lca_5_message, create_lca_6_message, create_lca_7_message, create_pscm_related_message)
 from opendbc.car.volvo.values import CarControllerParams
 
 
@@ -237,7 +238,6 @@ class CarController(CarControllerBase):
       counter, is_synced = self.lca_3_counter_sync.update(CS.msg_lca_3['COUNTER_1'])
       can_sends.append(create_lca_3_message(self.packer, lat_active, apply_angle, CS.msg_lca_3, counter))
       #can_sends.append(create_0x1a_message(self.packer, CS.msg_0x1a))
-      pass
 
     # SPEED messages - 0x60, 0x68 - 50 Hz
     if self.frame % 2 == 0: # 50 Hz
@@ -259,7 +259,6 @@ class CarController(CarControllerBase):
 
       can_sends.append(create_lca_2_message(self.packer, lat_active, CS.msg_lca_2,
                                             self.lca_2_counter_1, self.lca_2_counter_2))
-      pass
 
     # LCA_5 (formerly SPEED_1) - 0x67 - 50 Hz
     # Contains wheel speeds + LCA signals (LCA_TURN_BITS, LCA_5_STEER)

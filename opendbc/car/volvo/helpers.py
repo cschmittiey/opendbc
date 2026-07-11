@@ -254,14 +254,12 @@ def checksum_lca_5_message(byte0: int, byte1: int, byte3: int, byte4: int, byte5
     byte3: Byte 3 (0-255)
     byte4: Byte 4 (0-255)
     byte5: Byte 5 (0-255)
-    byte6: Byte 6 (0-255)
-    byte7: Byte 7 (0-255)
 
   Returns:
     int: Checksum value (0-255) for byte 2
 
   Example:
-    >>> checksum = calculate_checksum_0x67(0x80, 0x00, 0x4F, 0x00, 0x00, 0xBA, 0x00)
+    >>> checksum = checksum_lca_5_message(0x80, 0x00, 0x4F, 0x00, 0x00)
     >>> print(f"0x{checksum:02X}")
     0x32
   """
@@ -362,7 +360,7 @@ if __name__ == "__main__":
 
   all_passed = True
   for i, (bytes_list, expected) in enumerate(tests, 1):
-    calculated = calculate_checksum_0x67(*bytes_list)
+    calculated = checksum_lca_5_message(*bytes_list[:5])
     status = "✓" if calculated == expected else "✗"
 
     print(f"\nTest {i}: {status}")
