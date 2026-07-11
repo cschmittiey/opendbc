@@ -31,21 +31,19 @@ jobs:
           python -m unittest test_rx_check_frequency test_volvo -v
 
   safety_suite:
-    name: Full safety suite + 100% coverage (advisory)
+    name: Full safety suite + 100% coverage
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: ./opendbc/safety/tests/test.sh
 
   misra:
-    name: MISRA C:2012 (advisory)
+    name: MISRA C:2012
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: ./opendbc/safety/tests/misra/test_misra.sh
