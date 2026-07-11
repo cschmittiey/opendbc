@@ -1,0 +1,64 @@
+name: fork-ci
+
+# Fork-specific CI: upstream's tests.yml triggers on push to master, but this
+# fork lives on main, so those jobs never fire here. This workflow runs the
+# safety checks that matter for the out-of-tree Volvo/Polestar port.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 13 * * 0'  # Sunday: weekly mutation pass
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  volvo_safety:
+    name: Volvo safety tests + rx_check frequency lint
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run
+        run: |
+          source setup.sh
+          cd opendbc/safety/tests
+          python -m unittest test_rx_check_frequency test_volvo -v
+
+  safety_suite:
+    name: Full safety suite + 100% coverage (advisory)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./opendbc/safety/tests/test.sh
+
+  misra:
+    name: MISRA C:2012 (advisory)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./opendbc/safety/tests/misra/test_misra.sh
+
+  mutation:
+    name: Safety mutation tests (weekly, advisory)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run mutation tests
+        run: |
+          source setup.sh
+          python opendbc/safety/tests/mutation.py
