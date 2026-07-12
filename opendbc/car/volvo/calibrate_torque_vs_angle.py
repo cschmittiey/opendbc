@@ -53,7 +53,7 @@ import cereal.messaging as messaging
 LIVE_TESTING_FILE = "/data/openpilot/live_testing.txt"
 LOG_FILE = "/data/openpilot/torque_vs_angle_calibration.csv"
 
-# Per-step timing. Fixed rather than settle-detected to minimise driver fatigue.
+# Per-step timing. Fixed rather than settle-detected to minimize driver fatigue.
 SAMPLE_INTERVAL_S = 0.05       # 20 Hz sampling
 SETTLE_WAIT_S = 0.8            # wait after commanding new angle, before sampling
 SAMPLE_WINDOW_S = 0.7          # averaging window for the step's mean torque
@@ -109,15 +109,15 @@ class TorqueVsAngleCalibrator:
     torques, angles = [], []
     start = time.time()
     while self.running and time.time() - start < duration_s:
-      tq, ang = self._read_state()
-      if tq is None or ang is None:
+      tq, angle = self._read_state()
+      if tq is None or angle is None:
         continue
       if abs(tq) > MAX_DRIVER_TORQUE_NM:
         print(f"  SAFETY: driver torque {tq:+.1f} Nm exceeds limit. Aborting.")
         self.running = False
         break
       torques.append(tq)
-      angles.append(ang)
+      angles.append(angle)
       time.sleep(SAMPLE_INTERVAL_S)
     return torques, angles
 
@@ -141,8 +141,8 @@ class TorqueVsAngleCalibrator:
     gap = target_angle - mean_ang
 
     ts = time.time()
-    for i, (tq, ang) in enumerate(zip(tq_samples, ang_samples, strict=True)):
-      log_file.write(f"{ts},{target_angle:.3f},{ang:.3f},{tq:.3f},{i}\n")
+    for i, (tq, angle) in enumerate(zip(tq_samples, ang_samples, strict=True)):
+      log_file.write(f"{ts},{target_angle:.3f},{angle:.3f},{tq:.3f},{i}\n")
     log_file.flush()
 
     print(f"  target={target_angle:+.1f}°  actual={mean_ang:+.2f}°  gap={gap:+.2f}°  tq={mean_tq:+.2f} Nm  (std {std_tq:.2f})")

@@ -1,7 +1,6 @@
 from opendbc.car import structs, Bus
 from opendbc.can.parser import CANParser
-from opendbc.car.common.conversions import Conversions as CV
-from opendbc.car.volvo.values import DBC, CarControllerParams, VolvoSPAPlatformConfig, CAR
+from opendbc.car.volvo.values import DBC, VolvoSPAPlatformConfig, CAR
 from opendbc.car.interfaces import CarStateBase
 
 GearShifter = structs.CarState.GearShifter
@@ -33,6 +32,7 @@ class CarState(CarStateBase):
     self.msg_lca_4 = {}
     self.msg_lca_6 = {}
     self.msg_lca_7 = {}
+
   def update(self, can_parsers) -> structs.CarState:
     cp_main = can_parsers[Bus.main]
     cp_pt = can_parsers[Bus.pt]

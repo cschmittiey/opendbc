@@ -4,7 +4,7 @@ from opendbc.car.structs import CarParams
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms
 from opendbc.car.lateral import AngleSteeringLimits
 from opendbc.car.docs_definitions import CarDocs, CarHarness, CarParts
-from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries
+from opendbc.car.fw_query_definitions import FwQueryConfig
 
 Ecu = CarParams.Ecu
 
@@ -107,7 +107,7 @@ class VolvoSPAPlatformConfig(PlatformConfig):
 
 class CAR(Platforms):
   VOLVO_XC40_RECHARGE = VolvoCMAPlatformConfig(
-    [VolvoCarDocs("Volvo XC40 Recharge 2021-2023")],
+    [VolvoCarDocs("Volvo XC40 Recharge 2021-23")],
     CarSpecs(
       mass=2170,
       wheelbase=2.702,
@@ -128,7 +128,7 @@ class CAR(Platforms):
 
   # Polestar 2 is technically CMA, but appears to use SPA DBC for CAN 1 bus
   POLESTAR_2 = VolvoSPAPlatformConfig(
-    [VolvoCarDocs("Polestar 2 2020+")],
+    [VolvoCarDocs("Polestar 2 2020-25")],
     CarSpecs(
       mass=2123,
       wheelbase=2.735,

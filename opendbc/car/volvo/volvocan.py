@@ -1,5 +1,5 @@
-import random
-from opendbc.car.volvo.helpers import checksum_lca_2_message, checksum_2_0x69_message, checksum_1_pscm_related_message, checksum_2_pscm_related_message, checksum_lca_4_message, checksum_lca_5_message
+from opendbc.car.volvo.helpers import (checksum_lca_2_message, checksum_2_0x69_message, checksum_1_pscm_related_message,
+                                       checksum_2_pscm_related_message, checksum_lca_5_message)
 from opendbc.car.carlog import carlog
 
 def create_lca_message(packer, lat_active: bool, apply_angle: float, msg_lca: dict,
@@ -38,7 +38,8 @@ def create_lca_message(packer, lat_active: bool, apply_angle: float, msg_lca: di
     'LCA_STEER_LOOSELY': int(authority_pos) if lat_active else 0,
     'NEW_SIGNAL_7': 7,
     'LCA_STEER_LOOSELY_INV': int(authority_neg) if lat_active else 0,
-    'LCA_RATE_OF_CHANGE': 80 if lat_active else 251, # Steering rate - Stock LCA increased from 35 to 39 steppedly when steering request was overriden by openpilot that couldn't steer enough
+    # Steering rate - Stock LCA increased from 35 to 39 steppedly when steering request was overridden by openpilot that couldn't steer enough
+    'LCA_RATE_OF_CHANGE': 80 if lat_active else 251,
     'LCA_STEER': msg_lca['LCA_STEER'],
     'NEW_SIGNAL_6': 15,
   }
@@ -350,11 +351,6 @@ def create_pscm_related_message(packer, lat_active: bool, stock_lca_engaged: boo
   built_bytes = dat[1]  # dat is (addr, bytes, bus) tuple - extract bytes
   b1 = built_bytes[1]
   b2 = built_bytes[2]
-  b3 = built_bytes[3]
-  b4 = built_bytes[4]
-  b5 = built_bytes[5]
-  b6 = built_bytes[6]
-  b7 = built_bytes[7]
   values['CHECKSUM_1'] = checksum_1_pscm_related_message(b1, b2)
   values['CHECKSUM_2'] = checksum_2_pscm_related_message(b2)
   #assert values['CHECKSUM_1'] == msg_pscm_related['CHECKSUM_1']
@@ -469,4 +465,3 @@ def create_lca_7_message(packer, lat_active: bool, msg_lca_7: dict, lca_7_steer:
       values[key] = val
 
   return packer.make_can_msg('LCA_7', 2, values)
-

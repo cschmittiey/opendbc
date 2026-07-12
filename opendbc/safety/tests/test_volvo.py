@@ -2,7 +2,7 @@
 """
 Safety tests for Volvo CMA/SPA.
 
-The safety mode lives at ``opendbc/safety/modes/volvo.h`` and is parameterised
+The safety mode lives at ``opendbc/safety/modes/volvo.h`` and is parameterized
 by ``safetyParam``:
 
   - ``safetyParam == 0``       → CMA platform (Volvo XC40 Recharge)

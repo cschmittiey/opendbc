@@ -1,3 +1,6 @@
+from typing import Any
+
+
 class LiveTestingManager:
   TESTING_FILE = "/data/openpilot/live_testing.txt"
 
@@ -42,10 +45,10 @@ class LiveTestingManager:
         → {'lat_active': True, 'lca_5': {'LCA_TURN_BITS': 128}, 'lca': {'LCA_STEER': 100}}
     """
     try:
-      with open(self.TESTING_FILE, 'r') as f:
+      with open(self.TESTING_FILE) as f:
         lines = f.readlines()
 
-      config = {}
+      config: dict[str, Any] = {}
 
       for line in lines:
         line = line.strip()

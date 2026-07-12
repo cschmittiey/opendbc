@@ -139,7 +139,7 @@ class SteeringCalibrator:
 
     self._write_live_testing(turn_bits, steer)
 
-    print(f"    Waiting for settle...")
+    print("    Waiting for settle...")
     if not self._wait_for_settle():
       return None
 
@@ -149,7 +149,7 @@ class SteeringCalibrator:
       print(f"    SAFETY: Angle {current_angle:.1f}° exceeds limit!")
       return None
 
-    print(f"    Collecting samples...")
+    print("    Collecting samples...")
     samples = self._collect_samples(FINAL_SAMPLE_COUNT)
 
     if len(samples) < 3:
@@ -262,7 +262,7 @@ class SteeringCalibrator:
 
     self._write_live_testing(None, commanded_deg)
 
-    print(f"    Waiting for settle...")
+    print("    Waiting for settle...")
     if not self._wait_for_settle():
       return None
 
@@ -272,7 +272,7 @@ class SteeringCalibrator:
       print(f"    SAFETY: Angle {current_angle:.1f}° exceeds limit!")
       return None
 
-    print(f"    Collecting samples...")
+    print("    Collecting samples...")
     samples = self._collect_samples(FINAL_SAMPLE_COUNT)
 
     if len(samples) < 3:
@@ -414,9 +414,6 @@ class SteeringCalibrator:
       (255, 76, -10.0),   # 10.0° right
     ]
 
-    turn_bits_values = None  # Signal to use test_points instead
-    steer_values = None
-
     print(f"\n{'='*60}")
     print("DISCOVERY MODE: Testing OLD ENCODING scheme values")
     print(f"{'='*60}")
@@ -471,7 +468,7 @@ class SteeringCalibrator:
     steer_mean = statistics.mean(steer_vals)
     angle_mean = statistics.mean(angles)
 
-    num = sum((s - steer_mean) * (a - angle_mean) for s, a in zip(steer_vals, angles))
+    num = sum((s - steer_mean) * (a - angle_mean) for s, a in zip(steer_vals, angles, strict=True))
     den = sum((s - steer_mean) ** 2 for s in steer_vals)
 
     if abs(den) > 1e-10:
