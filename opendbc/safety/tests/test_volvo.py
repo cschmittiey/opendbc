@@ -10,8 +10,9 @@ by ``safetyParam``:
     Polestar 2)
 
 The two platforms share LCA/PSCM/etc. addresses on the main and party buses
-but use *different* PT-bus addresses and signal scales for ECM_1, BUS1_SPEED,
-and BUS1_CRUISE_CONTROL. This test file exercises both platforms through the
+but use *different* PT-bus addresses and signal scales for ECM_1 and
+BUS1_CRUISE_CONTROL. Vehicle speed is read from main-bus SPEED on both, so it
+is not platform-dependent. This test file exercises both platforms through the
 same generic ``CarSafetyTest`` harness so that any future divergence between
 ``carstate.py`` and ``volvo.h`` — e.g. a threshold drifting out of sync — is
 caught on a laptop instead of in the car.
@@ -19,6 +20,8 @@ caught on a laptop instead of in the car.
 Companion to: ``opendbc/car/volvo/carstate.py`` (must agree on thresholds).
 """
 
+import pathlib
+import re
 import unittest
 
 from opendbc.car.structs import CarParams
@@ -30,12 +33,16 @@ from opendbc.safety.tests.common import CANPackerSafety
 # Must match VOLVO_FLAG_SPA in opendbc/safety/modes/volvo.h
 VOLVO_FLAG_SPA = 1
 
+# Must match VOLVO_SPEED_TO_MS in volvo.h and SPEED_TO_MS in carstate.py
+VOLVO_SPEED_TO_MS = 0.003977
+
 # Bus layout (must match volvo.h)
 VOLVO_MAIN_BUS = 0
 VOLVO_PT_BUS = 1
 VOLVO_PARTY_BUS = 2
 
 # Shared platform-independent addresses
+VOLVO_SPEED         = 0x60
 VOLVO_LCA_STEER     = 0x58
 VOLVO_LCA_2         = 0x69
 VOLVO_LCA_3         = 0x57
@@ -111,9 +118,10 @@ class TestVolvoSafetyBase(common.CarSafetyTest):
     return self.mid_packer.make_can_msg_safety("LCA_2", VOLVO_MAIN_BUS, values)
 
   def _speed_msg(self, speed):
-    # PT-bus BUS1_SPEED in m/s; DBC factor converts to/from raw bits per platform.
-    values = {"BUS1_SPEED": speed}
-    return self.pt_packer.make_can_msg_safety("BUS1_SPEED", VOLVO_PT_BUS, values)
+    # Main-bus SPEED, the same message on both platforms. The DBC carries it as
+    # raw counts (factor 1) and volvo.h applies VOLVO_SPEED_TO_MS, so convert here.
+    values = {"SPEED": round(speed / VOLVO_SPEED_TO_MS)}
+    return self.mid_packer.make_can_msg_safety("SPEED", VOLVO_MAIN_BUS, values)
 
   def _speed_msg_2(self, speed):
     # Volvo's safety mode only consumes a single vehicle-speed source, so the
@@ -160,6 +168,25 @@ class TestVolvoSafetyBase(common.CarSafetyTest):
     self._rx(self._user_gas_msg(self.GAS_PRESSED_THRESHOLD + 1))
     self.assertTrue(self.safety.get_gas_pressed_prev(),
                     f"gas not flagged above {self.GAS_PRESSED_THRESHOLD}")
+
+  def test_speed_scale_self_consistent(self):
+    """
+    The main-bus SPEED LSB is written out in three places: volvo.h, carstate.py
+    and this file. They must agree, or the panda and openpilot disagree about
+    vehicle speed. Parsed as text so this holds without importing either.
+    """
+    root = pathlib.Path(__file__).parents[3]
+    sources = {
+      "volvo.h": (root / "opendbc/safety/modes/volvo.h",
+                  r"#define\s+VOLVO_SPEED_TO_MS\s+([0-9.]+)f?"),
+      "carstate.py": (root / "opendbc/car/volvo/carstate.py",
+                      r"^SPEED_TO_MS\s*=\s*([0-9.]+)"),
+    }
+    for name, (path, pattern) in sources.items():
+      m = re.search(pattern, path.read_text(), re.MULTILINE)
+      self.assertIsNotNone(m, f"could not find the speed LSB in {name}")
+      self.assertEqual(float(m.group(1)), VOLVO_SPEED_TO_MS,
+                       f"{name} speed LSB disagrees with test_volvo.py")
 
 
 class TestVolvoCMA(TestVolvoSafetyBase):

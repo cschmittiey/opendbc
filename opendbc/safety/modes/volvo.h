@@ -33,6 +33,10 @@
 #define VOLVO_SPA_ECM_1               0x25U   // RX accelerator pedal position
 #define VOLVO_SPA_BUS1_CRUISE_CONTROL 0x349U  // RX cruise control state
 
+// SPEED (0x60) is raw counts in the DBC. Measured against GPS ground speed on two
+// harnesses: implied LSB 0.0039736 and 0.0039792 m/s.
+#define VOLVO_SPEED_TO_MS 0.003977f
+
 
 // CAN bus definitions for Volvo
 // Using same naming as carstate.py for consistency: main, pt, party
@@ -41,7 +45,6 @@
 #define VOLVO_PARTY_BUS   2U  // Bus.party - VCU PSCM/BCM2 side (BCM2, SAS, EGSM, PSCM, where LCA is sent to)
 
 // Runtime addresses set by volvo_init based on safetyParam
-static uint16_t volvo_bus1_speed_addr;
 static uint16_t volvo_ecm_1_addr;
 static uint16_t volvo_bus1_cruise_control_addr;
 
@@ -59,6 +62,17 @@ static void volvo_rx_hook(const CANPacket_t *msg) {
       //brake_pressed = brake_a || brake_b;
       brake_pressed = brake_b;
     }
+
+    // Vehicle speed from the main bus, matching carstate.py. The PT bus carries a
+    // speed message too, but which car bus lands on PT is harness-dependent and its
+    // scaling differs per PT DBC, so both sides read the main bus instead.
+    // DBC: SG_ SPEED : 6|15@0+ (1,0) - raw counts, scaled here
+    if (msg->addr == VOLVO_SPEED) {
+      uint16_t speed_raw = ((msg->data[0] & 0x7FU) << 8) | msg->data[1];
+      float speed = (float)speed_raw * VOLVO_SPEED_TO_MS;
+      vehicle_moving = speed > 0.1;
+      UPDATE_VEHICLE_SPEED(speed);
+    }
   }
 
   // PT bus (bus 1) messages
@@ -72,21 +86,6 @@ static void volvo_rx_hook(const CANPacket_t *msg) {
         // SPA: SG_ ACCELERATOR_PEDAL_POS : 6|15@0+ (0.00390625,0) [0|32767] "%"
         uint16_t gas_raw = ((msg->data[0] & 0x7FU) << 8) | msg->data[1];
         gas_pressed = (gas_raw * 0.00390625) > 1.0; // > 1%
-      }
-    }
-
-    // Update vehicle speed from BUS1_SPEED
-    if (msg->addr == volvo_bus1_speed_addr) {
-      if (volvo_bus1_speed_addr == VOLVO_CMA_BUS1_SPEED) {
-        // CMA: SG_ BUS1_SPEED : 23|16@0+ (0.01886,0) [0|65535] "m/s"
-        uint16_t speed_raw = ((msg->data[2] & 0xFFU) << 8) | msg->data[3];
-        vehicle_moving = (speed_raw * 0.01886) > 0.1;
-        UPDATE_VEHICLE_SPEED(speed_raw * 0.01886);
-      } else {
-        // SPA: SG_ BUS1_SPEED : 6|15@0+ (0.0044704,0) [0|32767] "m/s"
-        uint16_t speed_raw = ((msg->data[0] & 0x7FU) << 8) | msg->data[1];
-        vehicle_moving = (speed_raw * 0.0044704) > 0.1;
-        UPDATE_VEHICLE_SPEED(speed_raw * 0.0044704);
       }
     }
 
@@ -205,7 +204,6 @@ static safety_config volvo_init(uint16_t param) {
   bool spa = GET_FLAG(param, VOLVO_FLAG_SPA);
 
   // Set PT bus addresses based on platform
-  volvo_bus1_speed_addr = spa ? VOLVO_SPA_BUS1_SPEED : VOLVO_CMA_BUS1_SPEED;
   volvo_ecm_1_addr = spa ? VOLVO_SPA_ECM_1 : VOLVO_CMA_ECM_1;
   volvo_bus1_cruise_control_addr = spa ? VOLVO_SPA_BUS1_CRUISE_CONTROL : VOLVO_CMA_BUS1_CRUISE_CONTROL;
 
@@ -232,7 +230,6 @@ static safety_config volvo_init(uint16_t param) {
   if (!spa) {
     static RxCheck volvo_rx_checks_cma[] = {
       {.msg = {{VOLVO_GEAR_POSITION, VOLVO_MAIN_BUS, 8, 40U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
-      {.msg = {{VOLVO_CMA_BUS1_SPEED, VOLVO_PT_BUS, 8, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_2, VOLVO_MAIN_BUS, 8, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_4, VOLVO_MAIN_BUS, 8, 29U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_6, VOLVO_MAIN_BUS, 8, 25U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
@@ -254,7 +251,6 @@ static safety_config volvo_init(uint16_t param) {
   } else {
     static RxCheck volvo_rx_checks_spa[] = {
       {.msg = {{VOLVO_GEAR_POSITION, VOLVO_MAIN_BUS, 8, 40U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
-      {.msg = {{VOLVO_SPA_BUS1_SPEED, VOLVO_PT_BUS, 8, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_2, VOLVO_MAIN_BUS, 8, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_4, VOLVO_MAIN_BUS, 8, 29U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
       {.msg = {{VOLVO_LCA_6, VOLVO_MAIN_BUS, 8, 25U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},

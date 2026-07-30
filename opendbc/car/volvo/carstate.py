@@ -6,6 +6,10 @@ from opendbc.car.interfaces import CarStateBase
 GearShifter = structs.CarState.GearShifter
 TransmissionType = structs.CarParams.TransmissionType
 
+# main-bus SPEED (0x60) is raw counts in the DBC; measured against GPS ground speed.
+# Must match VOLVO_SPEED_TO_MS in opendbc/safety/modes/volvo.h.
+SPEED_TO_MS = 0.003977
+
 
 class CarState(CarStateBase):
   def __init__(self, CP):
@@ -40,8 +44,11 @@ class CarState(CarStateBase):
     ret = structs.CarState()
 
     # car speed
-    # Basic vehicle state from BUS1_SPEED on PT bus
-    ret.vEgoRaw = cp_pt.vl["BUS1_SPEED"]["BUS1_SPEED"]
+    # SPEED on the main bus, not BUS1_SPEED on the PT bus: the main bus is identical
+    # across harnesses, while which car bus lands on PT (bus 1) is not, and the PT DBC
+    # in use depends on the fingerprint. Regressed against GPS ground speed over two
+    # routes on different harnesses: r=0.99989 both, residual sd 0.35-0.40 km/h.
+    ret.vEgoRaw = cp_main.vl["SPEED"]["SPEED"] * SPEED_TO_MS
     ret.vEgo, ret.aEgo = self.update_speed_kf(ret.vEgoRaw)
     ret.standstill = ret.vEgoRaw <= 0.1 # 0.1 m/s
 
