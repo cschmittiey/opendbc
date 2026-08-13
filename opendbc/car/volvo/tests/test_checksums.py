@@ -1,3 +1,5 @@
+import unittest
+
 from opendbc.car.volvo.helpers import (
   checksum_1_pscm_related_message,
   checksum_2_pscm_related_message,
@@ -33,19 +35,25 @@ PSCM_RELATED_CHECKSUM_2 = {
 }
 
 
-class TestPscmRelatedChecksums:
+class TestPscmRelatedChecksums(unittest.TestCase):
   def test_checksum_1_matches_the_car(self):
     for (b1, b2), expected in PSCM_RELATED_CHECKSUM_1.items():
-      assert checksum_1_pscm_related_message(b1, b2) == expected, \
-        f"b1=0x{b1:02X} b2=0x{b2:02X}"
+      with self.subTest(b1=hex(b1), b2=hex(b2)):
+        assert checksum_1_pscm_related_message(b1, b2) == expected
 
   def test_checksum_1_covers_esc_echo(self):
     # regression: ECHO=6 used to miss the lookup table and return 0x00, which the
     # receiving ECU logged as a checksum fault for as long as ESC was active
     for counter in range(15):
       b1, b2 = (counter << 4) | 6, 0x80 | counter
-      assert checksum_1_pscm_related_message(b1, b2) == PSCM_RELATED_CHECKSUM_1[(b1, b2)]
+      with self.subTest(counter=counter):
+        assert checksum_1_pscm_related_message(b1, b2) == PSCM_RELATED_CHECKSUM_1[(b1, b2)]
 
   def test_checksum_2_matches_the_car(self):
     for b2, expected in PSCM_RELATED_CHECKSUM_2.items():
-      assert checksum_2_pscm_related_message(b2) == expected, f"b2=0x{b2:02X}"
+      with self.subTest(b2=hex(b2)):
+        assert checksum_2_pscm_related_message(b2) == expected
+
+
+if __name__ == "__main__":
+  unittest.main()
