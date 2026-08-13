@@ -30,6 +30,20 @@ jobs:
           cd opendbc/safety/tests
           python -m unittest test_rx_check_frequency test_volvo -v
 
+  volvo_car:
+    name: Volvo car interface tests
+    # upstream's tests.yml runs the full unittest suite on master only, so the
+    # port's own python tests (CAN checksums, etc.) need a job here to run at all
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run
+        run: |
+          source setup.sh
+          python -m unittest discover -s opendbc/car/volvo -t . -v
+
   safety_suite:
     name: Full safety suite + 100% coverage
     if: github.event_name != 'schedule'
